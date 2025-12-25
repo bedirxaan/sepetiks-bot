@@ -1,26 +1,27 @@
+import logging
+import sqlite3
+import random
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
+# --- WEB SERVER (RENDER İÇİN UYANDIRMA SERVİSİ) ---
 def keep_alive():
-    server_address = ('', 8080) # Render genellikle 10000 veya 8080 portunu dinler
+    server_address = ('', 8080)
     httpd = HTTPServer(server_address, BaseHTTPRequestHandler)
     httpd.serve_forever()
 
 threading.Thread(target=keep_alive).start()
-import logging
-import sqlite3
-import random
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# --- KİŞİSEL AYARLARIN ---
+# --- AYARLAR ---
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
-ADMIN_ID = 575544867  # Hasan Sabbah ID'si eklendi ✅
+ADMIN_ID = 575544867  # Hasan Sabbah ID ✅
 
-# --- LOGLAMA (Hata Takibi İçin) ---
+# --- LOGLAMA ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# --- VERİTABANI (Müşteri Listesi) ---
+# --- VERİTABANI ---
 def init_db():
     conn = sqlite3.connect('sepetiks_users.db')
     c = conn.cursor()
@@ -35,152 +36,184 @@ def add_user(user_id, username):
     conn.commit()
     conn.close()
 
-# --- ÜRÜN LİSTESİ (Burayı İstediğin Gibi Çoğaltabilirsin) ---
+# --- GERÇEK ÜRÜN LİSTESİ (Katalogdan Çekilenler) ---
+# Not: Özel ürün linkleri olmadığı için ana mağaza linki eklendi.
+# İstersen url kısımlarına o ürünün direkt linkini yapıştırabilirsin.
 PRODUCTS = [
-    {"id": 1, "name": "El Yapımı Seramik Kase", "price": 120, "cat": "Dekor", "url": "https://shopier.com/sepetiks04"},
-    {"id": 2, "name": "Doğal Taş Bileklik", "price": 85, "cat": "Aksesuar", "url": "https://shopier.com/sepetiks04"},
-    {"id": 3, "name": "Kürt Deq Motifli Saat", "price": 450, "cat": "Saat", "url": "https://shopier.com/sepetiks04"},
-    {"id": 4, "name": "Minimalist Vazo", "price": 200, "cat": "Dekor", "url": "https://shopier.com/sepetiks04"},
+    # Mutfak & Züccaciye
+    {"id": 1, "name": "BOSCH Çelik Çaycı", "price": 1350, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 2, "name": "BOSCH LED'li Cam Çaycı", "price": 1100, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 3, "name": "Gold ve Desenli Baharatlık", "price": 1150, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 4, "name": "6'lı Porselen Çay Tabağı", "price": 200, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 5, "name": "6'lı Meşrubat Bardağı Seti", "price": 300, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 6, "name": "Çatal Bıçak Seti", "price": 1000, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 7, "name": "Kahve ve Baharat Öğütücü", "price": 350, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 8, "name": "3'lü Altın ve Gümüş Tepsi", "price": 1200, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 9, "name": "Vicalina Çelik Çaydanlık", "price": 1650, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 10, "name": "Bosch Çelik Kahve Makinesi", "price": 1999, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 11, "name": "Bosch Blender Seti", "price": 1500, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
+
+    # Outdoor & Kamp & Termos
+    {"id": 12, "name": "Kamp Çadırı (12-16-24 Kişilik)", "price": 1899, "cat": "Outdoor", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 13, "name": "Unique 1 LT Çelik Termos", "price": 850, "cat": "Outdoor", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 14, "name": "Travel Pot 4 LT Termos", "price": 1799, "cat": "Outdoor", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 15, "name": "Sumall Çantalı El Feneri", "price": 1650, "cat": "Outdoor", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 16, "name": "Cup Vacuum Filtreli Termos", "price": 599, "cat": "Outdoor", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 17, "name": "Stanley Tutmalı El Termosu", "price": 999, "cat": "Outdoor", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 18, "name": "Stanley El Termosu", "price": 700, "cat": "Outdoor", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 19, "name": "Colombia Taktik Kemer", "price": 299, "cat": "Outdoor", "url": "https://www.shopier.com/sepetiks04"},
+
+    # Çanta & Seyahat & Diğer
+    {"id": 20, "name": "3'lü Polo Valiz Seti", "price": 3000, "cat": "Canta", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 21, "name": "Kilim Sırt Çantası", "price": 400, "cat": "Canta", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 22, "name": "3'lü Set Hasır Çanta", "price": 300, "cat": "Canta", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 23, "name": "Yüksek Tabanlı Ortopedik Terlik", "price": 350, "cat": "Canta", "url": "https://www.shopier.com/sepetiks04"},
+    {"id": 24, "name": "Goldbaft Çift Kişilik Battaniye", "price": 850, "cat": "Ev", "url": "https://www.shopier.com/sepetiks04"},
 ]
 
-# --- KOMUT FONKSİYONLARI ---
-
+# --- ANA MENÜ FONKSİYONU ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    add_user(user.id, user.username) # Müşteriyi kaydet
+    add_user(user.id, user.username)
     
-    welcome_text = f"👋 Merhaba {user.first_name}! \n\nBen Sepetiks Asistanı. Sana özel el yapımı ürünlerimizi keşfetmek için hazırım. Ne yapmak istersin?"
+    welcome_text = (
+        f"🌿 **Hoş Geldin {user.first_name}!**\n\n"
+        "Sepetiks'in WhatsApp kataloğundaki en özel ürünler artık burada.\n"
+        "Kamp malzemelerinden mutfak setlerine kadar her şeyi inceleyebilirsin."
+    )
     
-    # Ana Menü Butonları
     keyboard = [
-        [InlineKeyboardButton("🛍 Ürünleri İncele", callback_data='catalog')],
-        [InlineKeyboardButton("🎲 Günün Fırsatı", callback_data='random_item'), InlineKeyboardButton("🎁 İndirim Kodu", callback_data='promo')],
-        [InlineKeyboardButton("🔍 Ürün Ara", callback_data='search_info'), InlineKeyboardButton("📞 Canlı Destek", callback_data='support')],
-        [InlineKeyboardButton("🌐 Web Sitemiz", url='https://sepetiks.com')]
+        [InlineKeyboardButton("🛍 Tüm Ürünleri Gör", callback_data='catalog_start')],
+        [InlineKeyboardButton("🔥 Günün Fırsatı", callback_data='random_item'), InlineKeyboardButton("🔍 Ürün Ara", callback_data='search_mode')],
+        [InlineKeyboardButton("📞 Canlı Destek", callback_data='support_mode'), InlineKeyboardButton("🌐 Shopier Mağazamız", url='https://www.shopier.com/sepetiks04')]
     ]
-    await update.message.reply_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(welcome_text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await update.message.reply_text(welcome_text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
-async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- BUTON YÖNETİMİ ---
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    if query.data == 'catalog':
+    data = query.data
+
+    # 1. KATEGORİ SEÇİM EKRANI (YENİ KATEGORİLER)
+    if data == 'catalog_start':
         keyboard = [
-            [InlineKeyboardButton("🏠 Dekorasyon", callback_data='cat_Dekor')],
-            [InlineKeyboardButton("⌚ Saat & Aksesuar", callback_data='cat_Aksesuar')],
+            [InlineKeyboardButton("🏕 Outdoor & Kamp & Termos", callback_data='show_Outdoor')],
+            [InlineKeyboardButton("☕ Mutfak & Züccaciye", callback_data='show_Mutfak')],
+            [InlineKeyboardButton("🎒 Çanta & Seyahat", callback_data='show_Canta')],
+            [InlineKeyboardButton("🏠 Ev Tekstili", callback_data='show_Ev')],
             [InlineKeyboardButton("🔙 Ana Menü", callback_data='main_menu')]
         ]
-        await query.edit_message_text("📂 Hangi kategoriyi gezmek istersin?", reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.edit_message_text("📂 **Hangi kategoriyi incelemek istersin?**", parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
-    elif query.data.startswith('cat_'):
-        category = query.data.split('_')[1]
-        filtered = [p for p in PRODUCTS if p['cat'] == category or category == "Aksesuar"]
+    # 2. ÜRÜNLERİ LİSTELEME
+    elif data.startswith('show_'):
+        category = data.split('_')[1]
+        filtered_products = [p for p in PRODUCTS if p['cat'] == category]
         
-        text = f"✨ *{category} Koleksiyonu:*\n"
+        if not filtered_products:
+            await query.edit_message_text("😔 Bu kategoride şu an ürün görüntülenemiyor.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Geri", callback_data='catalog_start')]]))
+            return
+
+        text = f"✨ **{category} Ürünleri**\n"
         keyboard = []
-        for p in filtered:
-            text += f"\n▫️ {p['name']} - {p['price']}₺"
-            keyboard.append([InlineKeyboardButton(f"🛒 {p['name']} Satın Al", url=p['url'])])
+        for p in filtered_products:
+            text += f"\n🔸 {p['name']} — {p['price']}₺"
+            # Shopier linkine yönlendirir
+            keyboard.append([InlineKeyboardButton(f"🛒 {p['name']}", url=p['url'])])
         
-        keyboard.append([InlineKeyboardButton("🔙 Geri Dön", callback_data='catalog')])
+        keyboard.append([InlineKeyboardButton("🔙 Kategoriler", callback_data='catalog_start')])
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
-    elif query.data == 'random_item':
+    # 3. GÜNÜN FIRSATI
+    elif data == 'random_item':
         item = random.choice(PRODUCTS)
-        text = f"🎲 *Şansına Bu Çıktı!* \n\n🔥 *{item['name']}*\n💰 Fiyat: {item['price']}₺\n\nBu ürünü kaçırma!"
-        keyboard = [[InlineKeyboardButton("Hemen Al", url=item['url']), InlineKeyboardButton("🔙 Ana Menü", callback_data='main_menu')]]
+        text = f"🎲 **Günün Şanslı Ürünü!** \n\n🔥 *{item['name']}*\n💰 Fiyat: {item['price']}₺\n\nBu fırsatı kaçırma!"
+        keyboard = [[InlineKeyboardButton("Hemen İncele", url=item['url']), InlineKeyboardButton("🔙 Ana Menü", callback_data='main_menu')]]
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
-    elif query.data == 'promo':
-        codes = ["SEPETIKS10", "YAZ2025", "OZELMUSTERI"]
-        selected = random.choice(codes)
-        await query.edit_message_text(f"🎁 İndirim Kodun Hazır!\n\n`{selected}`\n\n(Shopier ödeme ekranında kullanabilirsin.)", parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Ana Menü", callback_data='main_menu')]]))
+    # 4. DİĞER MODLAR
+    elif data == 'search_mode':
+        await query.edit_message_text("🔍 **Arama Modu**\n\nAradığın ürünün ismini (örneğin: 'termos' veya 'çaycı') yazıp gönder, hemen bulayım.", 
+                                      reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 İptal", callback_data='main_menu')]]))
 
-    elif query.data == 'search_info':
-        await query.edit_message_text("🔍 Aramak istediğin ürünü (örneğin: 'saat') direkt buraya yaz, hemen bulayım.")
+    elif data == 'support_mode':
+        await query.edit_message_text("📞 **Canlı Destek**\n\nSorunu veya sipariş notunu buraya yaz, doğrudan Hasan Sabbah'a ileteceğim.", 
+                                      reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Vazgeç", callback_data='main_menu')]]))
 
-    elif query.data == 'support':
-        await query.edit_message_text("📞 *Canlı Destek*\n\nBuraya yazdığın mesajlar doğrudan Hasan Sabbah'a iletilecektir. Sorunu yazabilirsin.", parse_mode='Markdown')
-
-    elif query.data == 'main_menu':
+    elif data == 'main_menu':
         await start(update, context)
 
-# --- MESAJ YAKALAYICI VE YÖNLENDİRİCİ ---
+# --- MESAJ YAKALAYICI ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower()
-    user_id = update.message.from_user.id
-    user_name = update.message.from_user.first_name
+    user = update.message.from_user
     
-    # Eğer mesajı atan SEN değilsen (Müşteriyse), mesaj sana gelsin
-    if user_id != ADMIN_ID:
+    # ADMİN DEĞİLSE -> MESAJI İLET
+    if user.id != ADMIN_ID:
         try:
-            admin_text = f"📩 *YENİ MÜŞTERİ MESAJI*\n\n👤 Kimden: {user_name} (ID: `{user_id}`)\n💬 Mesaj: {update.message.text}"
-            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text, parse_mode='Markdown')
+            msg_to_admin = f"📩 **Müşteri Mesajı!**\n\n👤: {user.first_name} (@{user.username})\n💬: {update.message.text}"
+            await context.bot.send_message(chat_id=ADMIN_ID, text=msg_to_admin)
             
-            # Otomatik cevap verelim ki müşteri boşlukta hissetmesin
-            # (Eğer ürün aramıyorsa sadece destek mesajıysa)
-            if not any(p['name'].lower() in text for p in PRODUCTS):
-                await update.message.reply_text("Mesajın yetkiliye iletildi, en kısa sürede dönüş yapacağız. ✅")
-        except Exception as e:
-            print(f"Hata: {e}")
+            found = any(p['name'].lower() in text for p in PRODUCTS)
+            if not found:
+                await update.message.reply_text("Mesajın alındı, en kısa sürede dönüş yapacağız. 🌸")
+        except:
+            pass
 
-    # Eğer mesaj içinde ürün adı geçiyorsa otomatik link ver
+    # ÜRÜN ARAMA FONKSİYONU
     found_products = [p for p in PRODUCTS if text in p['name'].lower()]
     if found_products:
-        reply = "🔍 *Bunu mu aradın?*\n"
+        reply = "🔍 **İşte bulduğum ürünler:**\n"
+        keyboard = []
         for p in found_products:
-            reply += f"🔹 {p['name']} - {p['price']}₺\n👉 Link: {p['url']}\n"
-        await update.message.reply_text(reply)
+            reply += f"\n🌿 {p['name']} - {p['price']}₺"
+            keyboard.append([InlineKeyboardButton(f"İncele: {p['name']}", url=p['url'])])
+        
+        await update.message.reply_text(reply, reply_markup=InlineKeyboardMarkup(keyboard))
 
-# --- ADMIN DUYURU SİSTEMİ (BROADCAST) ---
+# --- DUYURU (BROADCAST) ---
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    
-    # Güvenlik Kontrolü: Sadece SEN kullanabilirsin
-    if user_id != ADMIN_ID:
-        await update.message.reply_text("⛔ Bu komutu kullanmaya yetkiniz yok.")
-        return 
+    if update.effective_user.id != ADMIN_ID:
+        return
 
     if not context.args:
-        await update.message.reply_text("Kullanım: `/duyuru Mesajınız` şeklinde yazmalısın.")
+        await update.message.reply_text("❌ Kullanım: `/duyuru Mesajınız`")
         return
 
     message = " ".join(context.args)
-    
-    # Veritabanındaki herkesi çek
     conn = sqlite3.connect('sepetiks_users.db')
-    c = conn.cursor()
-    c.execute('SELECT user_id FROM users')
-    users = c.fetchall()
+    users = conn.execute('SELECT user_id FROM users').fetchall()
     conn.close()
 
-    sent_count = 0
-    await update.message.reply_text(f"📢 Duyuru gönderimi başladı... ({len(users)} kişi)")
-    
+    count = 0
+    await update.message.reply_text(f"📢 Gönderim başlıyor... ({len(users)} kişi)")
     for u in users:
         try:
-            # Kendine tekrar atmasın
             if u[0] != ADMIN_ID:
-                await context.bot.send_message(chat_id=u[0], text=f"🔔 *SEPETİKS DUYURU*\n\n{message}", parse_mode='Markdown')
-                sent_count += 1
+                await context.bot.send_message(chat_id=u[0], text=f"🔔 **SEPETİKS DUYURU**\n\n{message}", parse_mode='Markdown')
+                count += 1
         except:
-            pass # Kullanıcı botu engellediyse hata vermez, geçer
-    
-    await update.message.reply_text(f"✅ İşlem Tamam! Mesaj {sent_count} kişiye ulaştı.")
+            pass
+    await update.message.reply_text(f"✅ Mesaj {count} kişiye başarıyla iletildi.")
 
-# --- ANA MOTOR ---
+# --- MAIN ---
 def main():
-    init_db() # Veritabanını kur
+    init_db()
     application = Application.builder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("duyuru", broadcast))
-    application.add_handler(CallbackQueryHandler(menu_handler))
+    application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("✅ Sepetiks Botu Başarıyla Çalıştı! Telegram'a girip deneyebilirsin.")
+    print("✅ Sepetiks Bot (Katalog Sürümü) Aktif!")
     application.run_polling()
 
 if __name__ == '__main__':
     main()
-  
+    
