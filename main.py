@@ -174,7 +174,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == 'main_menu':
         await start(update, context)
 
-# --- MESAJ YAKALAYICI (DÜZELTİLDİ: ARTIK HERKESE CEVAP VERİYOR) ---
+# --- MESAJ YAKALAYICI (DÜZELTİLDİ: SENİ ENGELLEMİYOR) ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user = update.message.from_user
@@ -188,11 +188,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Cevabı yapıştır
     await update.message.reply_text(ai_response)
     
-    # Eğer yazan kişi MÜŞTERİ ise (Sen değilsen), sana rapor versin
-    # Sen yazıyorsan sana rapor atmasına gerek yok, zaten cevabı görüyorsun :)
+    # (Opsiyonel) Eğer mesajı atan sen değilsen sana bildirim gelir.
+    # Sen atıyorsan zaten cevabı görüyorsun.
     if user.id != ADMIN_ID:
         try:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🤖 **Bot Müşteriyle Konuşuyor!**\n\n👤 {user.first_name}: {text}\n💬 Bot: {ai_response}")
+            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🤖 Müşteri Mesajı: {text}")
         except:
             pass
 
@@ -234,7 +234,8 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("duyuru", broadcast))
     application.add_handler(CallbackQueryHandler(button_handler))
-    # Burası en önemli kısım: Mesajları yakalayan kod
+    
+    # Mesajları yakalayan kod burası
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     if application.job_queue:
@@ -245,4 +246,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
