@@ -8,7 +8,7 @@ import google.generativeai as genai
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# --- WEB SERVER (RENDER İÇİN UYANDIRMA SERVİSİ) ---
+# --- WEB SERVER (UYANDIRMA) ---
 def keep_alive():
     server_address = ('', 8080)
     httpd = HTTPServer(server_address, BaseHTTPRequestHandler)
@@ -17,7 +17,6 @@ def keep_alive():
 threading.Thread(target=keep_alive).start()
 
 # --- AYARLAR ---
-# Senin çalışan anahtarın:
 GEMINI_API_KEY = "AIzaSyBO1qYuIrcqTYlv7vhGsoB5Z0TPU-IECeM"
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
 ADMIN_ID = 575544867
@@ -25,9 +24,9 @@ ADMIN_ID = 575544867
 # --- YAPAY ZEKA AYARLARI ---
 genai.configure(api_key=GEMINI_API_KEY)
 
-# DÜZELTME BURADA YAPILDI: 'gemini-pro' en garanti modeldir.
-# Render'daki kütüphane eski olsa bile bu model çalışır.
-model = genai.GenerativeModel('gemini-pro')
+# DÜZELTME: Kütüphaneyi güncellediğimiz için artık bu model %100 çalışacak.
+# Bu model ücretsiz, hızlı ve kotası geniştir.
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- LOGLAMA ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -58,7 +57,7 @@ def get_all_users():
     conn.close()
     return users
 
-# --- GÜNCEL ÜRÜN LİSTESİ ---
+# --- ÜRÜN LİSTESİ ---
 PRODUCTS = [
     # Mutfak & Züccaciye
     {"id": 1, "name": "BOSCH Çelik Çaycı", "price": 1350, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
@@ -89,7 +88,7 @@ PRODUCTS = [
     {"id": 24, "name": "Goldbaft Çift Kişilik Battaniye", "price": 850, "cat": "Ev", "url": "https://www.shopier.com/sepetiks04"},
 ]
 
-# --- YAPAY ZEKA SOHBET FONKSİYONU ---
+# --- AI SOHBET ---
 async def ask_gemini(user_message):
     products_text = "\n".join([f"- {p['name']} ({p['price']} TL) [Kategori: {p['cat']}]" for p in PRODUCTS])
     
@@ -99,7 +98,7 @@ async def ask_gemini(user_message):
     GÖREVLERİN:
     1. Müşteriyle (veya Admin ile) samimi, sıcak ama profesyonel bir dille konuş.
     2. Ürünleri tanıt, özelliklerini öv ve satmaya çalış.
-    3. Sadece aşağıdaki listedeki ürünleri satabilirsin. Listede yoksa kibarca benzer bir şey öner.
+    3. Sadece aşağıdaki listedeki ürünleri satabilirsin.
     4. Fiyat sorulursa listeden bak.
     5. 'Nasıl alırım' denirse Shopier linkine yönlendir.
     6. Kısa ve net cevaplar ver, emoji kullan 🌿.
@@ -246,3 +245,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
