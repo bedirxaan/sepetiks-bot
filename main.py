@@ -17,13 +17,22 @@ def keep_alive():
 threading.Thread(target=keep_alive).start()
 
 # --- AYARLAR ---
-GEMINI_API_KEY = "AIzaSyCLwhvKMUD1cSfCZVApnljEvv2jM1m0V_M"
+# DİKKAT: Senin cURL komutundaki YENİ ve ÇALIŞAN anahtarın buraya eklendi:
+GEMINI_API_KEY = "AIzaSyBO1qYuIrcqTYlv7vhGsoB5Z0TPU-IECeM"
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
 ADMIN_ID = 575544867
 
 # --- YAPAY ZEKA AYARLARI ---
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+
+# DİKKAT: cURL komutunda kullandığın "gemini-2.0-flash" modelini buraya yazdım.
+# Eğer 2.0 henüz kütüphanede yoksa hata verebilir, o durumda tekrar 'gemini-1.5-flash' yaparız.
+# Ama cURL'de çalışıyorsa burada da çalışır.
+try:
+    model = genai.GenerativeModel('gemini-2.0-flash')
+except:
+    # Eğer 2.0 hata verirse yedeğe düşsün
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- LOGLAMA ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -47,11 +56,14 @@ def get_all_users():
     conn = sqlite3.connect('sepetiks_users.db')
     c = conn.cursor()
     c.execute('SELECT user_id FROM users')
-    users = [row[0] for row in c.fetchall()]
+    try:
+        users = [row[0] for row in c.fetchall()]
+    except:
+        users = []
     conn.close()
     return users
 
-# --- GÜNCEL ÜRÜN LİSTESİ ---
+# --- ÜRÜN LİSTESİ ---
 PRODUCTS = [
     # Mutfak & Züccaciye
     {"id": 1, "name": "BOSCH Çelik Çaycı", "price": 1350, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
@@ -82,7 +94,7 @@ PRODUCTS = [
     {"id": 24, "name": "Goldbaft Çift Kişilik Battaniye", "price": 850, "cat": "Ev", "url": "https://www.shopier.com/sepetiks04"},
 ]
 
-# --- YAPAY ZEKA SOHBET FONKSİYONU ---
+# --- AI SOHBET ---
 async def ask_gemini(user_message):
     products_text = "\n".join([f"- {p['name']} ({p['price']} TL) [Kategori: {p['cat']}]" for p in PRODUCTS])
     
@@ -92,7 +104,7 @@ async def ask_gemini(user_message):
     GÖREVLERİN:
     1. Müşteriyle (veya Admin ile) samimi, sıcak ama profesyonel bir dille konuş.
     2. Ürünleri tanıt, özelliklerini öv ve satmaya çalış.
-    3. Sadece aşağıdaki listedeki ürünleri satabilirsin. Listede yoksa kibarca benzer bir şey öner.
+    3. Sadece aşağıdaki listedeki ürünleri satabilirsin.
     4. Fiyat sorulursa listeden bak.
     5. 'Nasıl alırım' denirse Shopier linkine yönlendir.
     6. Kısa ve net cevaplar ver, emoji kullan 🌿.
@@ -107,8 +119,8 @@ async def ask_gemini(user_message):
     try:
         response = model.generate_content(system_prompt)
         return response.text
-    except:
-        return "Şu an bağlantımda ufak bir sorun var, birazdan tekrar dene istersen. 🌸"
+    except Exception as e:
+        return f"⚠️ Bir hata oluştu: {str(e)}"
 
 # --- ANA MENÜ ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -166,7 +178,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == 'random_item':
         item = random.choice(PRODUCTS)
         await query.edit_message_text("🤔 **Senin için düşünüyorum...**")
-        ai_comment = await ask_gemini(f"Müşteriye şu ürünü önerdim: {item['name']}. Bu ürün hakkında harika, kısa bir cümle söyle.")
+        ai_comment = await ask_gemini(f"Müşteriye şu ürünü önerdim: {item['name']}. Harika, kısa bir cümle söyle.")
         text = f"🎲 **Buna Bayılacaksın!** \n\n🔥 *{item['name']}*\n💰 {item['price']}₺\n\n🤖 **Asistan:** _{ai_comment}_"
         keyboard = [[InlineKeyboardButton("İncele", url=item['url']), InlineKeyboardButton("🔙 Ana Menü", callback_data='main_menu')]]
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
@@ -174,25 +186,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == 'main_menu':
         await start(update, context)
 
-# --- MESAJ YAKALAYICI (DÜZELTİLDİ: SENİ ENGELLEMİYOR) ---
+# --- MESAJ YAKALAYICI ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user = update.message.from_user
     
-    # "Yazıyor..." efekti
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
     
-    # Yapay zekaya sor
     ai_response = await ask_gemini(text)
     
-    # Cevabı yapıştır
     await update.message.reply_text(ai_response)
     
-    # (Opsiyonel) Eğer mesajı atan sen değilsen sana bildirim gelir.
-    # Sen atıyorsan zaten cevabı görüyorsun.
     if user.id != ADMIN_ID:
         try:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🤖 Müşteri Mesajı: {text}")
+            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🤖 Müşteri Mesajı: {text}\nBot: {ai_response}")
         except:
             pass
 
@@ -217,7 +224,7 @@ async def send_auto_recommendation(context: ContextTypes.DEFAULT_TYPE):
     if not users: return
     item = random.choice(PRODUCTS)
     try:
-        promo = model.generate_content(f"Bu ürünü ({item['name']}) bildirim olarak atacağım. 2 cümlelik, emojili, heyecanlı bir tanıtım yaz. Fiyat: {item['price']} TL").text
+        promo = model.generate_content(f"Bu ürünü ({item['name']}) bildirim olarak atacağım. 2 cümlelik, emojili tanıtım yaz. Fiyat: {item['price']} TL").text
     except:
         promo = f"🌟 Fırsat Ürünü: {item['name']} sadece {item['price']}₺!"
     
@@ -234,8 +241,6 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("duyuru", broadcast))
     application.add_handler(CallbackQueryHandler(button_handler))
-    
-    # Mesajları yakalayan kod burası
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     if application.job_queue:
