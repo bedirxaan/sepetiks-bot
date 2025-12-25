@@ -16,14 +16,9 @@ def keep_alive():
 
 threading.Thread(target=keep_alive).start()
 
-# --- AYARLAR (HEPSİ EKLENDİ) ---
-# 1. Senin verdiğin Google AI Anahtarı:
+# --- AYARLAR ---
 GEMINI_API_KEY = "AIzaSyCLwhvKMUD1cSfCZVApnljEvv2jM1m0V_M"
-
-# 2. Bot Tokenin:
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
-
-# 3. Senin Admin ID'n:
 ADMIN_ID = 575544867
 
 # --- YAPAY ZEKA AYARLARI ---
@@ -89,19 +84,18 @@ PRODUCTS = [
 
 # --- YAPAY ZEKA SOHBET FONKSİYONU ---
 async def ask_gemini(user_message):
-    # Ürün listesini metne döküyoruz ki yapay zeka ne sattığımızı bilsin
     products_text = "\n".join([f"- {p['name']} ({p['price']} TL) [Kategori: {p['cat']}]" for p in PRODUCTS])
     
     system_prompt = f"""
     Sen 'Sepetiks Asistan' adında, Sepetiks.com (Shopier) mağazasının yapay zeka satış danışmanısın.
     
-    GÖREVLERİN VE KURALLARIN:
-    1. Müşteriyle samimi, sıcak ama profesyonel bir dille konuş ("Siz" hitabı kullan, çok samimi olursa "Sen" diyebilirsin).
-    2. Amacın ürünleri tanıtmak, özelliklerini övmek ve müşteriyi SATIN ALMAYA ikna etmek.
-    3. Sadece aşağıdaki 'MAĞAZA ÜRÜNLERİ' listesinde olan ürünleri satabilirsin. Listede olmayan bir şey sorulursa nazikçe "Maalesef stoklarımızda yok ama şuna bakabilirsiniz..." diyerek elindekini öner.
-    4. Fiyat sorulursa listeden bakıp söyle. Pazarlık yapma.
-    5. Müşteri 'nasıl alırım' derse "Size gönderdiğim linkten Shopier güvencesiyle alabilirsiniz" de.
-    6. Kısa ve net cevaplar ver, destan yazma. Emoji kullan 🌿🎒🏕️.
+    GÖREVLERİN:
+    1. Müşteriyle (veya Admin ile) samimi, sıcak ama profesyonel bir dille konuş.
+    2. Ürünleri tanıt, özelliklerini öv ve satmaya çalış.
+    3. Sadece aşağıdaki listedeki ürünleri satabilirsin. Listede yoksa kibarca benzer bir şey öner.
+    4. Fiyat sorulursa listeden bak.
+    5. 'Nasıl alırım' denirse Shopier linkine yönlendir.
+    6. Kısa ve net cevaplar ver, emoji kullan 🌿.
     
     MAĞAZA ÜRÜNLERİ:
     {products_text}
@@ -110,40 +104,11 @@ async def ask_gemini(user_message):
     
     Müşterinin Mesajı: {user_message}
     """
-    
     try:
         response = model.generate_content(system_prompt)
         return response.text
-    except Exception as e:
-        return "Şu an çok yoğunum, Hasan Bey size hemen dönecektir. 🌸"
-
-# --- OTOMATİK ÜRÜN ÖNERİSİ (ZAMANLAYICI) ---
-async def send_auto_recommendation(context: ContextTypes.DEFAULT_TYPE):
-    users = get_all_users()
-    if not users:
-        return
-
-    item = random.choice(PRODUCTS)
-    # AI ile cazip bir tanıtım metni yazdıralım
-    try:
-        promo_text = model.generate_content(f"Bu ürünü ({item['name']}) müşterilere anlık bildirim olarak göndereceğim. Kısa, etkileyici, emoji kullanan, harekete geçirici 2 cümlelik bir tanıtım yaz. Fiyatı: {item['price']} TL.").text
     except:
-        promo_text = f"🌟 **Sizin İçin Seçtik!**\n\n{item['name']} stoklarımızda.\nFiyat: {item['price']}₺"
-
-    msg = f"🔔 **Sepetiks Öneriyor**\n\n{promo_text}\n\n👇 Hemen İncele:"
-    
-    keyboard = [[InlineKeyboardButton("🛒 Ürüne Git", url=item['url'])]]
-    
-    count = 0
-    for user_id in users:
-        try:
-            # Kendine atmasın, sadece müşterilere
-            if user_id != ADMIN_ID:
-                await context.bot.send_message(chat_id=user_id, text=msg, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
-                count += 1
-        except:
-            pass
-    print(f"⏰ Otomatik öneri {count} kişiye gönderildi.")
+        return "Şu an bağlantımda ufak bir sorun var, birazdan tekrar dene istersen. 🌸"
 
 # --- ANA MENÜ ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -153,13 +118,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         f"🌿 **Merhaba {user.first_name}!**\n\n"
         "Ben Sepetiks'in yapay zeka asistanıyım. 🤖\n"
-        "Bana ürünler hakkında dilediğini sorabilirsin, seninle sohbet edebilirim veya sana en uygun ürünü önerebilirim.\n\n"
-        "Hadi başlayalım, ne yapmak istersin?"
+        "Bana dilediğini yazabilirsin, seninle sohbet edebilirim veya ürün önerebilirim.\n\n"
+        "Hadi başlayalım!"
     )
     
     keyboard = [
         [InlineKeyboardButton("🛍 Ürün Katalogu", callback_data='catalog_start')],
-        [InlineKeyboardButton("🎲 Bana Tavsiye Ver", callback_data='random_item')],
+        [InlineKeyboardButton("🎲 Tavsiye Ver", callback_data='random_item')],
         [InlineKeyboardButton("🌐 Mağazaya Git", url='https://www.shopier.com/sepetiks04')]
     ]
     
@@ -182,16 +147,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🏠 Ev Tekstili", callback_data='show_Ev')],
             [InlineKeyboardButton("🔙 Sohbet", callback_data='main_menu')]
         ]
-        await query.edit_message_text("📂 **Hangi kategoriyi merak ediyorsun?**", parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.edit_message_text("📂 **Hangi kategori?**", parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data.startswith('show_'):
         category = data.split('_')[1]
         filtered = [p for p in PRODUCTS if p['cat'] == category]
-        
         if not filtered:
              await query.edit_message_text("Bu kategoride ürün kalmadı.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Geri", callback_data='catalog_start')]]))
              return
-
         text = f"✨ **{category} Ürünlerimiz**\n"
         keyboard = []
         for p in filtered:
@@ -201,84 +164,85 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data == 'random_item':
-        # Yapay zeka ile kullanıcıya özel yorumlu öneri
         item = random.choice(PRODUCTS)
-        # Buton tıklandığında bekletme mesajı verelim
-        await query.edit_message_text("🤔 **Senin için en iyisini düşünüyorum...**")
-        
-        ai_comment = await ask_gemini(f"Müşteriye şu ürünü önerdim: {item['name']}. Sadece bu ürün hakkında harika, kısa bir cümle söyle.")
-        
-        text = f"🎲 **Bence buna bayılacaksın!** \n\n🔥 *{item['name']}*\n💰 {item['price']}₺\n\n🤖 **Asistan Yorumu:**\n_{ai_comment}_"
+        await query.edit_message_text("🤔 **Senin için düşünüyorum...**")
+        ai_comment = await ask_gemini(f"Müşteriye şu ürünü önerdim: {item['name']}. Bu ürün hakkında harika, kısa bir cümle söyle.")
+        text = f"🎲 **Buna Bayılacaksın!** \n\n🔥 *{item['name']}*\n💰 {item['price']}₺\n\n🤖 **Asistan:** _{ai_comment}_"
         keyboard = [[InlineKeyboardButton("İncele", url=item['url']), InlineKeyboardButton("🔙 Ana Menü", callback_data='main_menu')]]
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data == 'main_menu':
         await start(update, context)
 
-# --- MESAJ YAKALAYICI (AI SOHBET) ---
+# --- MESAJ YAKALAYICI (DÜZELTİLDİ: ARTIK HERKESE CEVAP VERİYOR) ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user = update.message.from_user
     
-    # 1. Admin (Sen) yazıyorsan AI cevap vermesin (komutlar için)
-    if user.id == ADMIN_ID:
-        pass 
+    # "Yazıyor..." efekti
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
     
-    # 2. Müşteri yazıyorsa -> YAPAY ZEKA DEVREYE GİRER
-    else:
-        # "Yazıyor..." efekti verelim
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
-        
-        # Yapay zekaya sor
-        ai_response = await ask_gemini(text)
-        
-        # Cevabı gönder
-        await update.message.reply_text(ai_response)
-        
-        # Sana rapor geç
+    # Yapay zekaya sor
+    ai_response = await ask_gemini(text)
+    
+    # Cevabı yapıştır
+    await update.message.reply_text(ai_response)
+    
+    # Eğer yazan kişi MÜŞTERİ ise (Sen değilsen), sana rapor versin
+    # Sen yazıyorsan sana rapor atmasına gerek yok, zaten cevabı görüyorsun :)
+    if user.id != ADMIN_ID:
         try:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🤖 **Bot Sohbet Ediyor!**\n\n👤 {user.first_name}: {text}\n🤖 Bot: {ai_response}")
+            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🤖 **Bot Müşteriyle Konuşuyor!**\n\n👤 {user.first_name}: {text}\n💬 Bot: {ai_response}")
         except:
             pass
 
-# --- DUYURU ---
+# --- DUYURU VE OTOMATİK MESAJ ---
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     if not context.args: return
-    
     msg = " ".join(context.args)
     users = get_all_users()
     count = 0
-    await update.message.reply_text(f"📢 Gönderim başlıyor... ({len(users)} kişi)")
-    
+    await update.message.reply_text("📢 Gönderiliyor...")
     for u in users:
         try:
             if u != ADMIN_ID: 
                 await context.bot.send_message(chat_id=u, text=f"📢 **DUYURU:**\n{msg}")
                 count += 1
         except: pass
-    await update.message.reply_text(f"✅ Mesaj {count} kişiye gönderildi.")
+    await update.message.reply_text(f"✅ {count} kişiye gitti.")
 
-# --- MAIN ---
+async def send_auto_recommendation(context: ContextTypes.DEFAULT_TYPE):
+    users = get_all_users()
+    if not users: return
+    item = random.choice(PRODUCTS)
+    try:
+        promo = model.generate_content(f"Bu ürünü ({item['name']}) bildirim olarak atacağım. 2 cümlelik, emojili, heyecanlı bir tanıtım yaz. Fiyat: {item['price']} TL").text
+    except:
+        promo = f"🌟 Fırsat Ürünü: {item['name']} sadece {item['price']}₺!"
+    
+    msg = f"🔔 **Sepetiks Önerisi**\n\n{promo}\n\n👇 İncele:"
+    kb = [[InlineKeyboardButton("🛒 Ürüne Git", url=item['url'])]]
+    for u in users:
+        try:
+            if u != ADMIN_ID: await context.bot.send_message(chat_id=u, text=msg, reply_markup=InlineKeyboardMarkup(kb))
+        except: pass
+
 def main():
     init_db()
     application = Application.builder().token(TOKEN).build()
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("duyuru", broadcast))
     application.add_handler(CallbackQueryHandler(button_handler))
-    
-    # AI Sohbet Modülü
+    # Burası en önemli kısım: Mesajları yakalayan kod
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # OTOMATİK ÖNERİ SİSTEMİ (JobQueue)
     if application.job_queue:
-        # Her 14400 saniyede bir (4 Saatte Bir) çalışır.
         application.job_queue.run_repeating(send_auto_recommendation, interval=14400, first=60)
-        print("⏰ Otomatik ürün önericisi kuruldu (4 saatte bir).")
 
-    print("🤖 Sepetiks Yapay Zeka Asistanı Aktif!")
+    print("✅ Sepetiks AI Bot Aktif!")
     application.run_polling()
 
 if __name__ == '__main__':
     main()
+    
