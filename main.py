@@ -8,7 +8,7 @@ import google.generativeai as genai
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# --- WEB SERVER (RENDER İÇİN UYANDIRMA SERVİSİ) ---
+# --- WEB SERVER (UYANDIRMA) ---
 def keep_alive():
     server_address = ('', 8080)
     httpd = HTTPServer(server_address, BaseHTTPRequestHandler)
@@ -17,7 +17,7 @@ def keep_alive():
 threading.Thread(target=keep_alive).start()
 
 # --- AYARLAR ---
-# DİKKAT: Senin cURL komutundaki YENİ ve ÇALIŞAN anahtarın buraya eklendi:
+# Yeni aldığın çalışan anahtarın burada kalsın:
 GEMINI_API_KEY = "AIzaSyBO1qYuIrcqTYlv7vhGsoB5Z0TPU-IECeM"
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
 ADMIN_ID = 575544867
@@ -25,14 +25,9 @@ ADMIN_ID = 575544867
 # --- YAPAY ZEKA AYARLARI ---
 genai.configure(api_key=GEMINI_API_KEY)
 
-# DİKKAT: cURL komutunda kullandığın "gemini-2.0-flash" modelini buraya yazdım.
-# Eğer 2.0 henüz kütüphanede yoksa hata verebilir, o durumda tekrar 'gemini-1.5-flash' yaparız.
-# Ama cURL'de çalışıyorsa burada da çalışır.
-try:
-    model = genai.GenerativeModel('gemini-2.0-flash')
-except:
-    # Eğer 2.0 hata verirse yedeğe düşsün
-    model = genai.GenerativeModel('gemini-1.5-flash')
+# DÜZELTME BURADA YAPILDI: 2.0 yerine en sağlam olan 1.5 sürümüne geçtik.
+# Bu sürüm ücretsiz planda saniyede 15 isteğe kadar izin verir, asla takılmaz.
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- LOGLAMA ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -104,7 +99,7 @@ async def ask_gemini(user_message):
     GÖREVLERİN:
     1. Müşteriyle (veya Admin ile) samimi, sıcak ama profesyonel bir dille konuş.
     2. Ürünleri tanıt, özelliklerini öv ve satmaya çalış.
-    3. Sadece aşağıdaki listedeki ürünleri satabilirsin.
+    3. Sadece aşağıdaki listedeki ürünleri satabilirsin. Listede yoksa kibarca benzer bir şey öner.
     4. Fiyat sorulursa listeden bak.
     5. 'Nasıl alırım' denirse Shopier linkine yönlendir.
     6. Kısa ve net cevaplar ver, emoji kullan 🌿.
@@ -120,7 +115,7 @@ async def ask_gemini(user_message):
         response = model.generate_content(system_prompt)
         return response.text
     except Exception as e:
-        return f"⚠️ Bir hata oluştu: {str(e)}"
+        return f"⚠️ Hata oluştu (Yeniden dene): {str(e)}"
 
 # --- ANA MENÜ ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -178,7 +173,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == 'random_item':
         item = random.choice(PRODUCTS)
         await query.edit_message_text("🤔 **Senin için düşünüyorum...**")
-        ai_comment = await ask_gemini(f"Müşteriye şu ürünü önerdim: {item['name']}. Harika, kısa bir cümle söyle.")
+        ai_comment = await ask_gemini(f"Müşteriye şu ürünü önerdim: {item['name']}. Kısa ve harika bir cümle söyle.")
         text = f"🎲 **Buna Bayılacaksın!** \n\n🔥 *{item['name']}*\n💰 {item['price']}₺\n\n🤖 **Asistan:** _{ai_comment}_"
         keyboard = [[InlineKeyboardButton("İncele", url=item['url']), InlineKeyboardButton("🔙 Ana Menü", callback_data='main_menu')]]
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
