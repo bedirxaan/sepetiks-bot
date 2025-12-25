@@ -17,15 +17,16 @@ def keep_alive():
 threading.Thread(target=keep_alive).start()
 
 # --- AYARLAR ---
-GEMINI_API_KEY = "AIzaSyBO1qYuIrcqTYlv7vhGsoB5Z0TPU-IECeM"
+# YENİ OLUŞTURDUĞUN TEMİZ ANAHTAR:
+GEMINI_API_KEY = "AIzaSyAFgiYV_uK1YBgke7ydF_GSz1zoHSX94wk"
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
 ADMIN_ID = 575544867
 
 # --- YAPAY ZEKA AYARLARI ---
 genai.configure(api_key=GEMINI_API_KEY)
 
-# DÜZELTME: Kütüphaneyi güncellediğimiz için artık bu model %100 çalışacak.
-# Bu model ücretsiz, hızlı ve kotası geniştir.
+# 1. Adımı (requirements.txt güncellemesini) yaptıysan bu model uçar! 🚀
+# Ücretsiz, hızlı ve sohbet için en iyisi.
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- LOGLAMA ---
@@ -57,7 +58,7 @@ def get_all_users():
     conn.close()
     return users
 
-# --- ÜRÜN LİSTESİ ---
+# --- GÜNCEL ÜRÜN LİSTESİ ---
 PRODUCTS = [
     # Mutfak & Züccaciye
     {"id": 1, "name": "BOSCH Çelik Çaycı", "price": 1350, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
@@ -98,7 +99,7 @@ async def ask_gemini(user_message):
     GÖREVLERİN:
     1. Müşteriyle (veya Admin ile) samimi, sıcak ama profesyonel bir dille konuş.
     2. Ürünleri tanıt, özelliklerini öv ve satmaya çalış.
-    3. Sadece aşağıdaki listedeki ürünleri satabilirsin.
+    3. Sadece aşağıdaki listedeki ürünleri satabilirsin. Listede yoksa kibarca benzer bir şey öner.
     4. Fiyat sorulursa listeden bak.
     5. 'Nasıl alırım' denirse Shopier linkine yönlendir.
     6. Kısa ve net cevaplar ver, emoji kullan 🌿.
