@@ -14,7 +14,7 @@ def keep_alive():
 
 threading.Thread(target=keep_alive).start()
 
-# --- AYARLAR ---
+# --- AYARLAR (HEPSİ EKLİ) ---
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
 ADMIN_ID = 575544867  # Hasan Sabbah ID ✅
 
@@ -36,9 +36,7 @@ def add_user(user_id, username):
     conn.commit()
     conn.close()
 
-# --- GERÇEK ÜRÜN LİSTESİ (Katalogdan Çekilenler) ---
-# Not: Özel ürün linkleri olmadığı için ana mağaza linki eklendi.
-# İstersen url kısımlarına o ürünün direkt linkini yapıştırabilirsin.
+# --- GÜNCEL ÜRÜN LİSTESİ (Katalogdaki Gerçek Ürünler) ---
 PRODUCTS = [
     # Mutfak & Züccaciye
     {"id": 1, "name": "BOSCH Çelik Çaycı", "price": 1350, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
@@ -88,6 +86,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📞 Canlı Destek", callback_data='support_mode'), InlineKeyboardButton("🌐 Shopier Mağazamız", url='https://www.shopier.com/sepetiks04')]
     ]
     
+    # Mesajı güncellemeye çalış, olmazsa yeni at
     if update.callback_query:
         await update.callback_query.edit_message_text(welcome_text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
     else:
@@ -99,10 +98,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
 
-    # 1. KATEGORİ SEÇİM EKRANI (YENİ KATEGORİLER)
+    # 1. KATEGORİ SEÇİM EKRANI
     if data == 'catalog_start':
         keyboard = [
-            [InlineKeyboardButton("🏕 Outdoor & Kamp & Termos", callback_data='show_Outdoor')],
+            [InlineKeyboardButton("🏕 Outdoor & Kamp", callback_data='show_Outdoor')],
             [InlineKeyboardButton("☕ Mutfak & Züccaciye", callback_data='show_Mutfak')],
             [InlineKeyboardButton("🎒 Çanta & Seyahat", callback_data='show_Canta')],
             [InlineKeyboardButton("🏠 Ev Tekstili", callback_data='show_Ev')],
@@ -123,20 +122,19 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = []
         for p in filtered_products:
             text += f"\n🔸 {p['name']} — {p['price']}₺"
-            # Shopier linkine yönlendirir
+            # Satın al butonu direkt Shopier'e gider
             keyboard.append([InlineKeyboardButton(f"🛒 {p['name']}", url=p['url'])])
         
         keyboard.append([InlineKeyboardButton("🔙 Kategoriler", callback_data='catalog_start')])
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
-    # 3. GÜNÜN FIRSATI
+    # 3. DİĞER MODLAR
     elif data == 'random_item':
         item = random.choice(PRODUCTS)
         text = f"🎲 **Günün Şanslı Ürünü!** \n\n🔥 *{item['name']}*\n💰 Fiyat: {item['price']}₺\n\nBu fırsatı kaçırma!"
         keyboard = [[InlineKeyboardButton("Hemen İncele", url=item['url']), InlineKeyboardButton("🔙 Ana Menü", callback_data='main_menu')]]
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
-    # 4. DİĞER MODLAR
     elif data == 'search_mode':
         await query.edit_message_text("🔍 **Arama Modu**\n\nAradığın ürünün ismini (örneğin: 'termos' veya 'çaycı') yazıp gönder, hemen bulayım.", 
                                       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 İptal", callback_data='main_menu')]]))
@@ -159,6 +157,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg_to_admin = f"📩 **Müşteri Mesajı!**\n\n👤: {user.first_name} (@{user.username})\n💬: {update.message.text}"
             await context.bot.send_message(chat_id=ADMIN_ID, text=msg_to_admin)
             
+            # Eğer ürün aramıyorsa genel cevap ver
             found = any(p['name'].lower() in text for p in PRODUCTS)
             if not found:
                 await update.message.reply_text("Mesajın alındı, en kısa sürede dönüş yapacağız. 🌸")
@@ -176,7 +175,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(reply, reply_markup=InlineKeyboardMarkup(keyboard))
 
-# --- DUYURU (BROADCAST) ---
+# --- DUYURU SİSTEMİ ---
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -211,7 +210,7 @@ def main():
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("✅ Sepetiks Bot (Katalog Sürümü) Aktif!")
+    print("✅ Sepetiks Bot (Bosch & Kamp Sürümü) Aktif!")
     application.run_polling()
 
 if __name__ == '__main__':
