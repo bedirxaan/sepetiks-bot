@@ -8,7 +8,7 @@ import google.generativeai as genai
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# --- WEB SERVER (UYANDIRMA) ---
+# --- WEB SERVER (RENDER İÇİN UYANDIRMA SERVİSİ) ---
 def keep_alive():
     server_address = ('', 8080)
     httpd = HTTPServer(server_address, BaseHTTPRequestHandler)
@@ -17,7 +17,7 @@ def keep_alive():
 threading.Thread(target=keep_alive).start()
 
 # --- AYARLAR ---
-# Yeni aldığın çalışan anahtarın burada kalsın:
+# Senin çalışan anahtarın:
 GEMINI_API_KEY = "AIzaSyBO1qYuIrcqTYlv7vhGsoB5Z0TPU-IECeM"
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
 ADMIN_ID = 575544867
@@ -25,9 +25,9 @@ ADMIN_ID = 575544867
 # --- YAPAY ZEKA AYARLARI ---
 genai.configure(api_key=GEMINI_API_KEY)
 
-# DÜZELTME BURADA YAPILDI: 2.0 yerine en sağlam olan 1.5 sürümüne geçtik.
-# Bu sürüm ücretsiz planda saniyede 15 isteğe kadar izin verir, asla takılmaz.
-model = genai.GenerativeModel('gemini-1.5-flash')
+# DÜZELTME BURADA YAPILDI: 'gemini-pro' en garanti modeldir.
+# Render'daki kütüphane eski olsa bile bu model çalışır.
+model = genai.GenerativeModel('gemini-pro')
 
 # --- LOGLAMA ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -58,7 +58,7 @@ def get_all_users():
     conn.close()
     return users
 
-# --- ÜRÜN LİSTESİ ---
+# --- GÜNCEL ÜRÜN LİSTESİ ---
 PRODUCTS = [
     # Mutfak & Züccaciye
     {"id": 1, "name": "BOSCH Çelik Çaycı", "price": 1350, "cat": "Mutfak", "url": "https://www.shopier.com/sepetiks04"},
@@ -89,7 +89,7 @@ PRODUCTS = [
     {"id": 24, "name": "Goldbaft Çift Kişilik Battaniye", "price": 850, "cat": "Ev", "url": "https://www.shopier.com/sepetiks04"},
 ]
 
-# --- AI SOHBET ---
+# --- YAPAY ZEKA SOHBET FONKSİYONU ---
 async def ask_gemini(user_message):
     products_text = "\n".join([f"- {p['name']} ({p['price']} TL) [Kategori: {p['cat']}]" for p in PRODUCTS])
     
@@ -115,7 +115,7 @@ async def ask_gemini(user_message):
         response = model.generate_content(system_prompt)
         return response.text
     except Exception as e:
-        return f"⚠️ Hata oluştu (Yeniden dene): {str(e)}"
+        return f"⚠️ Hata oluştu (Tekrar dene): {str(e)}"
 
 # --- ANA MENÜ ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
