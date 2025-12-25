@@ -7,7 +7,7 @@ import threading
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- WEB SERVER (RENDER'I UYANIK TUTAR) ---
+# --- WEB SERVER (RENDER İÇİN) ---
 def keep_alive():
     server_address = ('', 8080)
     httpd = HTTPServer(server_address, BaseHTTPRequestHandler)
@@ -16,65 +16,69 @@ def keep_alive():
 threading.Thread(target=keep_alive).start()
 
 # --- AYARLAR ---
+# Yeni çalışan API Key'in
 GEMINI_API_KEY = "AIzaSyAFgiYV_uK1YBgke7ydF_GSz1zoHSX94wk"
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
 ADMIN_ID = 575544867
 
-# --- VERİTABANI ---
-def init_db():
-    conn = sqlite3.connect('sepetiks_users.db')
-    conn.execute('CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, username TEXT)')
-    conn.commit()
-    conn.close()
-
-def add_user(user_id, username):
-    conn = sqlite3.connect('sepetiks_users.db')
-    conn.execute('INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)', (user_id, username))
-    conn.commit()
-    conn.close()
-
-# --- ÜRÜN KATALOĞU (RESİMLERDEN GÜNCELLENDİ) ---
+# --- ÜRÜN LİSTESİ (TÜM KATALOG GÖRSELLERİNDEN) ---
 #
 PRODUCTS = [
     {"name": "3'lü Polo Valiz Seti", "price": 3000},
+    {"name": "Kilim Sırt Çantası", "price": 400},
+    {"name": "3'lü Set Hasır Çanta", "price": 300},
+    {"name": "Yüksek Tabanlı Ortopedik Terlik", "price": 350},
+    {"name": "Gold ve Desenli Baharatlık", "price": 1150},
+    {"name": "Kamp Çadırı (12-16-24 Kişilik)", "price": 1899},
     {"name": "BOSCH Çelik Çaycı", "price": 1350},
     {"name": "BOSCH LED'li Cam Çaycı", "price": 1100},
-    {"name": "Kamp Çadırı (12-16-24 Kişilik)", "price": 1899},
+    {"name": "6'lı Porselen Desenli Çay Tabağı", "price": 200},
+    {"name": "Unique 1 LT Çelik Termos", "price": 850},
+    {"name": "6'lı Meşrubat Seti", "price": 300},
+    {"name": "Çatal Bıçak Seti", "price": 1000},
     {"name": "Travel Pot 4 LT Termos", "price": 1799},
-    {"name": "Stanley Tutmalı Termos", "price": 999},
-    {"name": "Vicalina Çelik Çaydanlık", "price": 1650},
+    {"name": "Kahve ve Baharat Öğütücü", "price": 350},
+    {"name": "3'lü Altın ve Gümüş Tepsi", "price": 1200},
+    {"name": "Goldbaft Battaniye", "price": 850},
     {"name": "Sumall Sun El Feneri", "price": 1650},
-    {"name": "Colombia Taktik Kemer", "price": 299}
+    {"name": "Cup Vacuum Filtreli Termos", "price": 599},
+    {"name": "Vicalina Çelik Çaydanlık", "price": 1650},
+    {"name": "Bosch Çelik Kahve Makinesi", "price": 1999},
+    {"name": "Colombia Taktik Kemer", "price": 299},
+    {"name": "Stanley Tutmalı Termos", "price": 999},
+    {"name": "Bosch Blender Seti", "price": 1500},
+    {"name": "Stanley El Termosu", "price": 700}
 ]
 
 # --- YAPAY ZEKA SOHBET ---
 def ask_gemini_direct(user_message):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # API sürümünü v1 yaptık ve headers ekledik (Daha kararlı)
+    url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
+    headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
     
-    products_text = "\n".join([f"- {p['name']} ({p['price']} TL)" for p in PRODUCTS])
+    prod_list = "\n".join([f"- {p['name']} ({p['price']} TL)" for p in PRODUCTS])
     
     prompt = (
-        "Sen Sepetiks Mağaza Asistanısın. Samimi ve enerjik bir dille konuş. "
-        f"Ürün listemiz: {products_text}. "
-        "Müşteriye sadece bu ürünlerle ilgili bilgi ver ve ikna edici ol."
+        "Sen Sepetiks Mağaza Asistanısın. Enerjik, samimi ve nazik bir satış danışmanı gibi davran. "
+        f"Ürün kataloğumuz şudur: {prod_list}. "
+        "Müşterinin sorularına bu ürünleri överek cevap ver ve ikna et."
     )
 
-    payload = {"contents": [{"parts": [{"text": f"{prompt}\n\nMüşteri Sorusu: {user_message}"}]}]}
+    payload = {"contents": [{"parts": [{"text": f"{prompt}\n\nMüşteri: {user_message}"}]}]}
 
     try:
-        response = requests.post(url, json=payload, timeout=15)
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
         res_json = response.json()
-        # Eğer hata varsa direkt hatayı döndür ki görelim
         if response.status_code != 200:
-            return f"⚠️ Teknik Hata ({response.status_code}): {response.text[:50]}"
+            return f"⚠️ Teknik Hata ({response.status_code}): {response.text[:100]}"
         return res_json['candidates'][0]['content']['parts'][0]['text']
     except Exception as e:
         return f"⚠️ Bağlantı Hatası: {str(e)}"
 
 # --- TELEGRAM ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    add_user(update.effective_user.id, update.effective_user.username)
-    await update.message.reply_text("🌿 Merhaba! Ben Sepetiks AI Asistanı. Ürünlerimiz hakkında dilediğini sorabilirsin!")
+    welcome = f"🌿 Merhaba {update.effective_user.first_name}! Sepetiks'in akıllı asistanı hizmetinizde. Hangi ürünümüzü merak ediyorsunuz?"
+    await update.message.reply_text(welcome)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
@@ -83,11 +87,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if update.message.from_user.id != ADMIN_ID:
         try:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=f"👤 {update.message.from_user.first_name}: {update.message.text}\n🤖: {ai_response}")
+            log = f"👤 {update.message.from_user.first_name}: {update.message.text}\n🤖: {ai_response}"
+            await context.bot.send_message(chat_id=ADMIN_ID, text=log)
         except: pass
 
 def main():
-    init_db()
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
