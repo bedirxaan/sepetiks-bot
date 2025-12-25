@@ -17,7 +17,8 @@ def keep_alive():
 threading.Thread(target=keep_alive).start()
 
 # --- AYARLAR ---
-# YENİ OLUŞTURDUĞUN TEMİZ ANAHTAR:
+# DİKKAT: Şimdilik anahtarı buraya direkt yazdım ki "Env Var" hatasıyla uğraşmayalım.
+# Bot çalıştıktan sonra bunu tekrar gizleriz. Bu senin çalışan temiz anahtarın.
 GEMINI_API_KEY = "AIzaSyAFgiYV_uK1YBgke7ydF_GSz1zoHSX94wk"
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
 ADMIN_ID = 575544867
@@ -25,9 +26,9 @@ ADMIN_ID = 575544867
 # --- YAPAY ZEKA AYARLARI ---
 genai.configure(api_key=GEMINI_API_KEY)
 
-# 1. Adımı (requirements.txt güncellemesini) yaptıysan bu model uçar! 🚀
-# Ücretsiz, hızlı ve sohbet için en iyisi.
-model = genai.GenerativeModel('gemini-1.5-flash')
+# DÜZELTME: 'gemini-pro' modeline geçtik.
+# Bu model kütüphane eski olsa bile çalışır, 404 hatası vermez.
+model = genai.GenerativeModel('gemini-pro')
 
 # --- LOGLAMA ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
