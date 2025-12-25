@@ -1,3 +1,12 @@
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+
+def keep_alive():
+    server_address = ('', 8080) # Render genellikle 10000 veya 8080 portunu dinler
+    httpd = HTTPServer(server_address, BaseHTTPRequestHandler)
+    httpd.serve_forever()
+
+threading.Thread(target=keep_alive).start()
 import logging
 import sqlite3
 import random
