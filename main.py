@@ -1,17 +1,16 @@
 import logging
-import sqlite3
 import threading
 import difflib
-import random
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# --- WEB SERVER (RENDER İÇİN) ---
+# --- WEB SERVER (RENDER İÇİN ZORUNLU) ---
 def keep_alive():
     server_address = ('', 8080)
     httpd = HTTPServer(server_address, BaseHTTPRequestHandler)
+    print("✅ Web Server Başlatıldı (Port 8080)")
     httpd.serve_forever()
 
 threading.Thread(target=keep_alive).start()
@@ -20,256 +19,205 @@ threading.Thread(target=keep_alive).start()
 TOKEN = "8400134709:AAFIXgPcCdBySd71X_oP8d8JTtJFGvpN7P8"
 ADMIN_ID = 575544867
 SHOP_URL = "https://www.shopier.com/sepetiks04"
-WHATSAPP = "https://wa.me/905555555555" # Numaranı buraya yaz
+WHATSAPP = "https://wa.me/905555555555" 
 
-# --- VERİTABANI YÖNETİCİSİ ---
-def init_db():
-    conn = sqlite3.connect('sepetiks_pro.db', check_same_thread=False)
-    c = conn.cursor()
-    
-    # Tabloları Oluştur
-    c.execute('''CREATE TABLE IF NOT EXISTS users 
-                 (user_id INTEGER PRIMARY KEY, first_name TEXT, join_date TEXT, is_banned INTEGER)''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS products 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, price INTEGER, stock INTEGER, description TEXT, category TEXT)''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS cart 
-                 (user_id INTEGER, product_id INTEGER, quantity INTEGER)''')
+# --- RAM VERİTABANI (ASLA ÇÖKMEZ) ---
+# Bot yeniden başlayınca sıfırlanır ama Render'da en stabil çalışan yöntem budur.
+USERS = set() # Kullanıcı ID'leri
+CART = {}     # Sepetler {user_id: [product_obj, ...]}
+BANNED = set() # Banlılar
 
-    c.execute('''CREATE TABLE IF NOT EXISTS coupons 
-                 (code TEXT PRIMARY KEY, discount INTEGER)''')
-
-    # Başlangıç Verilerini Ekle (Eğer boşsa)
-    c.execute('SELECT count(*) FROM products')
-    if c.fetchone()[0] == 0:
-        initial_products = [
-            ("Polo 3'lü Valiz Seti", 3000, 50, "Kırılmaz ABS, 360° Tekerlek, 3'lü Set", "canta"),
-            ("BOSCH Çelik Çaycı", 1350, 20, "Paslanmaz çelik, ikili ısıtma, tasarruflu", "mutfak"),
-            ("Kamp Çadırı (12 Kişilik)", 1899, 10, "Su geçirmez, devasa kamp çadırı", "outdoor"),
-            ("Stanley Termos", 999, 100, "24 saat koruma garantili", "outdoor"),
-            ("Ortopedik Terlik", 350, 200, "Anatomik taban, rahat kullanım", "giyim"),
-            ("Gold Baharatlık", 1150, 30, "Porselen ve gold detaylı lüks set", "mutfak"),
-            ("Sumall El Feneri", 1650, 15, "1km menzilli şarjlı fener", "outdoor")
-        ]
-        c.executemany('INSERT INTO products (name, price, stock, description, category) VALUES (?,?,?,?,?)', initial_products)
-        
-        c.execute("INSERT OR IGNORE INTO coupons VALUES ('SEPETIKS10', 10)")
-        c.execute("INSERT OR IGNORE INTO coupons VALUES ('HOSGELDIN', 5)")
-        
-        conn.commit()
-    return conn
-
-# Veritabanını Başlat
-db = init_db()
+# --- ÜRÜN KATALOĞU ---
+#
+PRODUCTS = [
+    {"id": 1, "name": "Polo 3'lü Valiz Seti", "price": 3000, "stock": 50, "desc": "Kırılmaz ABS, 360° Tekerlek, 3'lü Set", "cat": "canta"},
+    {"id": 2, "name": "BOSCH Çelik Çaycı", "price": 1350, "stock": 20, "desc": "Paslanmaz çelik, ikili ısıtma", "cat": "mutfak"},
+    {"id": 3, "name": "Kamp Çadırı (12 Kişilik)", "price": 1899, "stock": 10, "desc": "Su geçirmez devasa çadır", "cat": "outdoor"},
+    {"id": 4, "name": "Stanley Termos", "price": 999, "stock": 100, "desc": "24 saat koruma garantili", "cat": "outdoor"},
+    {"id": 5, "name": "Ortopedik Terlik", "price": 350, "stock": 200, "desc": "Anatomik taban rahatlık", "cat": "giyim"},
+    {"id": 6, "name": "Gold Baharatlık", "price": 1150, "stock": 30, "desc": "Porselen lüks set", "cat": "mutfak"},
+    {"id": 7, "name": "Sumall El Feneri", "price": 1650, "stock": 15, "desc": "1km menzilli şarjlı", "cat": "outdoor"}
+]
 
 # --- YARDIMCI FONKSİYONLAR ---
-def get_product_by_fuzzy(query):
-    cursor = db.cursor()
-    cursor.execute("SELECT name FROM products")
-    all_names = [r[0] for r in cursor.fetchall()]
-    
-    # Yazım hatası toleransı (Fuzzy Search)
-    matches = difflib.get_close_matches(query, all_names, n=1, cutoff=0.5)
+def find_product(query):
+    # Tüm ürün isimlerini listele
+    names = [p['name'] for p in PRODUCTS]
+    # Yazım hatasına rağmen en yakın sonucu bul (Fuzzy Search)
+    matches = difflib.get_close_matches(query, names, n=1, cutoff=0.4)
     
     if matches:
-        cursor.execute("SELECT * FROM products WHERE name = ?", (matches[0],))
-        return cursor.fetchone()
+        for p in PRODUCTS:
+            if p['name'] == matches[0]:
+                return p
+    # İsimde geçiyorsa da bul (Örn: "çay" yazınca "Çaycı"yı bul)
+    for p in PRODUCTS:
+        if query.lower() in p['name'].lower():
+            return p
     return None
 
 def get_cart_total(user_id):
-    cursor = db.cursor()
-    cursor.execute('''SELECT p.price, c.quantity FROM cart c 
-                      JOIN products p ON c.product_id = p.id 
-                      WHERE c.user_id = ?''', (user_id,))
-    items = cursor.fetchall()
-    return sum(item[0] * item[1] for item in items)
+    items = CART.get(user_id, [])
+    return sum(item['price'] for item in items)
 
 # --- KLAVYELER ---
 def main_menu():
     kb = [
-        [InlineKeyboardButton("🛍 Tüm Ürünler", callback_data="all_prod"), InlineKeyboardButton("🔥 Günün Fırsatı", callback_data="deal_day")],
-        [InlineKeyboardButton("🛒 Sepetim", callback_data="my_cart"), InlineKeyboardButton("🎟 Kupon", callback_data="coupon_menu")],
-        [InlineKeyboardButton("📦 Kargo Takip", callback_data="track"), InlineKeyboardButton("🆘 Canlı Destek", callback_data="support")],
-        [InlineKeyboardButton("🌐 Web Sitesi", url=SHOP_URL)]
+        [InlineKeyboardButton("🛍 Ürünleri Gör", callback_data="all_prod"), InlineKeyboardButton("🔥 Fırsat", callback_data="deal")],
+        [InlineKeyboardButton("🛒 Sepetim", callback_data="my_cart"), InlineKeyboardButton("📦 Kargo", callback_data="track")],
+        [InlineKeyboardButton("🆘 Destek", callback_data="support"), InlineKeyboardButton("🌐 Web Site", url=SHOP_URL)]
     ]
     return InlineKeyboardMarkup(kb)
 
 def admin_menu():
     kb = [
         [InlineKeyboardButton("📢 Duyuru Yap", callback_data="adm_broadcast")],
-        [InlineKeyboardButton("👥 Kullanıcı Sayısı", callback_data="adm_stats")],
-        [InlineKeyboardButton("➕ Stok Ekle", callback_data="adm_stock")]
+        [InlineKeyboardButton("📊 İstatistik", callback_data="adm_stats")]
     ]
     return InlineKeyboardMarkup(kb)
 
-# --- TEMEL KOMUTLAR ---
+# --- KOMUTLAR ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    cursor = db.cursor()
+    USERS.add(user.id)
     
-    # Kullanıcıyı Kaydet
-    cursor.execute("INSERT OR IGNORE INTO users (user_id, first_name, join_date, is_banned) VALUES (?, ?, ?, 0)", 
-                   (user.id, user.first_name, str(datetime.now())))
-    db.commit()
-    
-    # Ban Kontrolü
-    cursor.execute("SELECT is_banned FROM users WHERE user_id = ?", (user.id,))
-    if cursor.fetchone()[0] == 1:
-        await update.message.reply_text("⛔ Üzgünüm, bu mağazadan engellendiniz.")
+    if user.id in BANNED:
+        await update.message.reply_text("⛔ Engellendiniz.")
         return
 
     welcome = (
         f"🌿 **Merhaba {user.first_name}!**\n"
-        "Sepetiks Profesyonel Asistanına hoş geldin.\n\n"
-        "🔎 **Ürün mü arıyorsun?** Adını yazman yeterli (Örn: 'voliz' yazsan bile anlarım!).\n"
-        "👇 Veya menüden seçim yap:"
+        "Sepetiks Profesyonel Asistanı hazır.\n\n"
+        "🔎 **Ne aramıştınız?** (Örn: 'valiz', 'termos', 'çaycı')\n"
+        "👇 Veya menüden seçin:"
     )
     await update.message.reply_text(welcome, reply_markup=main_menu(), parse_mode='Markdown')
 
-# --- MESAJ YAKALAYICI (BEYİN) ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message: return
     text = update.message.text
     user_id = update.effective_user.id
-    
-    # Admin Paneli Girişi
+
+    # Admin Paneli
     if text == "/admin" and user_id == ADMIN_ID:
-        await update.message.reply_text("🔑 **Admin Paneli**", reply_markup=admin_menu())
+        await update.message.reply_text("🔑 **Yönetici Paneli**", reply_markup=admin_menu())
         return
 
-    # Destek Talebi
+    # Destek Mesajı
     if text.startswith("/destek"):
         msg = text.replace("/destek", "").strip()
         if msg:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🆘 **YENİ DESTEK TALEBİ**\n👤: {update.effective_user.first_name}\n📝: {msg}")
-            await update.message.reply_text("✅ Mesajınız yetkiliye iletildi.")
+            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🆘 **DESTEK TALEBİ**\n👤: {update.effective_user.first_name}\n📝: {msg}")
+            await update.message.reply_text("✅ Mesajınız iletildi.")
         else:
-            await update.message.reply_text("Lütfen mesajınızı `/destek [mesajınız]` şeklinde yazın.")
+            await update.message.reply_text("Lütfen `/destek mesajınız` şeklinde yazın.")
         return
 
-    # Akıllı Ürün Arama
-    product = get_product_by_fuzzy(text)
+    # Ürün Arama
+    product = find_product(text)
     
     if product:
-        pid, name, price, stock, desc, cat = product
-        
-        # Stok Durumu
-        stock_msg = "🟢 Stokta Var" if stock > 0 else "🔴 Tükendi"
-        
+        status = "🟢 Stokta Var" if product['stock'] > 0 else "🔴 Tükendi"
         reply = (
-            f"✨ **{name}**\n"
-            f"📂 Kategori: {cat.upper()}\n"
-            f"📝 {desc}\n\n"
-            f"💰 **Fiyat:** {price} TL\n"
-            f"📦 Durum: {stock_msg} ({stock} adet)"
+            f"✨ **{product['name']}**\n"
+            f"📂 Kategori: {product['cat'].upper()}\n"
+            f"📝 {product['desc']}\n\n"
+            f"💰 **Fiyat:** {product['price']} TL\n"
+            f"📦 Durum: {status}"
         )
-        
-        kb = [[InlineKeyboardButton("➕ Sepete Ekle", callback_data=f"add_{pid}")], [InlineKeyboardButton("Satın Al (Web)", url=SHOP_URL)]]
+        kb = [[InlineKeyboardButton("➕ Sepete Ekle", callback_data=f"add_{product['id']}")], [InlineKeyboardButton("Satın Al", url=SHOP_URL)]]
         await update.message.reply_text(reply, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
-        
     else:
-        # Anlaşılmadıysa
         await update.message.reply_text(
-            "🔍 Aradığınızı tam bulamadım.\n"
-            "- Ürün adı yazabilir (Örn: Çaycı, Termos)\n"
-            "- Destek için `/destek` yazabilirsin.",
+            "🤔 Tam anlayamadım. Ürün adını yazabilir veya menüyü kullanabilirsin.",
             reply_markup=main_menu()
         )
 
-# --- BUTON İŞLEMLERİ ---
+# --- BUTONLAR ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
     await query.answer()
-    
-    cursor = db.cursor()
 
-    # Ürünleri Listele
+    # Ürün Listeleme
     if data == "all_prod":
-        cursor.execute("SELECT name, price FROM products")
-        prods = cursor.fetchall()
-        text = "📦 **ÜRÜN KATALOĞU**\n\n"
-        for p in prods:
-            text += f"▪️ {p[0]} - {p[1]} TL\n"
+        text = "📦 **KATALOG**\n\n"
+        for p in PRODUCTS:
+            text += f"▪️ {p['name']} - {p['price']} TL\n"
         await query.edit_message_text(text, reply_markup=main_menu(), parse_mode='Markdown')
 
     # Sepete Ekle
     elif data.startswith("add_"):
         pid = int(data.split("_")[1])
-        cursor.execute("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, 1)", (user_id, pid))
-        db.commit()
-        await query.edit_message_text("✅ Ürün sepete eklendi!", reply_markup=main_menu())
+        # Ürünü bul
+        prod = next((p for p in PRODUCTS if p['id'] == pid), None)
+        if prod:
+            if user_id not in CART: CART[user_id] = []
+            CART[user_id].append(prod)
+            await query.edit_message_text(f"✅ **{prod['name']}** sepete atıldı!", reply_markup=main_menu(), parse_mode='Markdown')
 
-    # Sepeti Göster
+    # Sepetim
     elif data == "my_cart":
-        cursor.execute('''SELECT p.name, p.price, c.quantity, c.product_id FROM cart c 
-                          JOIN products p ON c.product_id = p.id 
-                          WHERE c.user_id = ?''', (user_id,))
-        items = cursor.fetchall()
-        
+        items = CART.get(user_id, [])
         if not items:
             await query.edit_message_text("🛒 Sepetin boş.", reply_markup=main_menu())
             return
-            
-        total = 0
+        
+        total = sum(i['price'] for i in items)
         text = "🛒 **SEPETİNİZ**\n\n"
-        for item in items:
-            text += f"▫️ {item[0]} (x{item[2]}) - {item[1]*item[2]} TL\n"
-            total += item[1] * item[2]
-            
+        for i in items:
+            text += f"▫️ {i['name']} - {i['price']} TL\n"
         text += f"\n💰 **TOPLAM:** {total} TL"
-        kb = [[InlineKeyboardButton("💳 Satın Al", url=SHOP_URL)], [InlineKeyboardButton("🗑 Temizle", callback_data="clear_cart")]]
+        
+        kb = [[InlineKeyboardButton("💳 Satın Al", url=SHOP_URL)], [InlineKeyboardButton("🗑 Boşalt", callback_data="clear")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
 
-    # Sepeti Temizle
-    elif data == "clear_cart":
-        cursor.execute("DELETE FROM cart WHERE user_id = ?", (user_id,))
-        db.commit()
-        await query.edit_message_text("🗑 Sepet boşaltıldı.", reply_markup=main_menu())
+    # Sepet Temizle
+    elif data == "clear":
+        CART[user_id] = []
+        await query.edit_message_text("🗑 Sepet temizlendi.", reply_markup=main_menu())
 
-    # Günün Fırsatı
-    elif data == "deal_day":
-        cursor.execute("SELECT * FROM products ORDER BY RANDOM() LIMIT 1")
-        p = cursor.fetchone()
-        new_price = int(p[2] * 0.90) # %10 İndirim
-        text = f"🔥 **GÜNÜN FIRSATI** 🔥\n\n**{p[1]}**\n~~{p[2]} TL~~ yerine sadece **{new_price} TL**!\n\n⏳ Bu fırsat 24 saat geçerli."
-        kb = [[InlineKeyboardButton("Hemen Kap", url=SHOP_URL)]]
+    # Fırsat
+    elif data == "deal":
+        import random
+        p = random.choice(PRODUCTS)
+        new_price = int(p['price'] * 0.9)
+        text = f"🔥 **GÜNÜN FIRSATI** 🔥\n\n**{p['name']}**\n~~{p['price']} TL~~ yerine **{new_price} TL**!"
+        kb = [[InlineKeyboardButton("Kaçırma", url=SHOP_URL)]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
 
-    # Canlı Destek / İletişim
+    # Destek
     elif data == "support":
-        text = f"🆘 **Canlı Destek**\n\nBizimle iletişime geçmek için:\n📞 WhatsApp: {WHATSAPP}\n\nVeya buraya `/destek sorunuz` yazarak mesaj bırakabilirsiniz."
+        text = f"🆘 **İletişim**\n📞 WhatsApp: {WHATSAPP}\n\nMesaj bırakmak için: `/destek mesajınız`"
         await query.edit_message_text(text, reply_markup=main_menu(), parse_mode='Markdown')
+        
+    # Kargo
+    elif data == "track":
+        tarih = (datetime.now() + timedelta(days=2)).strftime("%d.%m.%Y")
+        await query.edit_message_text(f"🚚 Siparişleriniz **{tarih}** tarihinde kargoya verilir.", reply_markup=main_menu(), parse_mode='Markdown')
 
-    # Admin: İstatistik
+    # Admin Stats
     elif data == "adm_stats":
         if user_id != ADMIN_ID: return
-        cursor.execute("SELECT count(*) FROM users")
-        u_count = cursor.fetchone()[0]
-        cursor.execute("SELECT count(*) FROM products")
-        p_count = cursor.fetchone()[0]
-        await query.edit_message_text(f"📊 **İstatistikler**\n\n👥 Kullanıcı: {u_count}\n📦 Ürün: {p_count}", reply_markup=admin_menu())
+        await query.edit_message_text(f"📊 **Durum:**\n👥 Kullanıcı: {len(USERS)}\n📦 Ürün: {len(PRODUCTS)}", reply_markup=admin_menu())
 
-# --- ADMIN KOMUTU: DUYURU ---
+# --- DUYURU ---
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     msg = " ".join(context.args)
     if not msg:
-        await update.message.reply_text("⚠️ Mesaj yazmadın.")
+        await update.message.reply_text("⚠️ Mesaj yaz.")
         return
     
-    cursor = db.cursor()
-    cursor.execute("SELECT user_id FROM users")
-    users = cursor.fetchall()
-    
-    await update.message.reply_text(f"📢 {len(users)} kişiye gönderiliyor...")
-    for u in users:
+    count = 0
+    await update.message.reply_text(f"📢 {len(USERS)} kişiye gönderiliyor...")
+    for uid in USERS:
         try:
-            await context.bot.send_message(chat_id=u[0], text=f"📢 **DUYURU**\n\n{msg}")
+            await context.bot.send_message(chat_id=uid, text=f"📢 **DUYURU**\n\n{msg}")
+            count += 1
         except: pass
-    await update.message.reply_text("✅ Tamamlandı.")
+    await update.message.reply_text(f"✅ {count} kişiye gitti.")
 
 def main():
     app = Application.builder().token(TOKEN).build()
@@ -279,9 +227,8 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(handle_callback))
     
-    print("✅ Sepetiks PRO MAX (SQLite Sürümü) Aktif!")
+    print("✅ Sepetiks RAM Modu (Stabil) Aktif!")
     app.run_polling()
 
 if __name__ == '__main__':
     main()
-        
